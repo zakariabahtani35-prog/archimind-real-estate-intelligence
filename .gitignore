@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+__pycache__/
+*.py[cod]
+backend/app/artifacts/*.pkl
+backend/app/artifacts/*.json
+*.db
+*.sqlite
+*.sqlite3

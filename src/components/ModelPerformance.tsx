@@ -1,97 +1,145 @@
-import React from 'react';
-import { ShieldCheck, TrendingUp, Info } from 'lucide-react';
-import { MODEL_METRICS_DATA } from '../lib/data';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { MLService } from '../services/api';
+import { ClassificationReport, RegressionReport } from '../types/ml';
 import { cn } from '../lib/utils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const comparisonData = [
-  { name: 'XGBoost', accuracy: 94.2, latency: 12 },
-  { name: 'RandomForest', accuracy: 91.8, latency: 45 },
-  { name: 'LGBM', accuracy: 93.5, latency: 15 },
-  { name: 'CatBoost', accuracy: 92.4, latency: 28 },
-];
+const formatNumber = (value?: number | null, digits = 2) =>
+  typeof value === 'number' ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : 'N/A';
 
 export function ModelPerformance() {
+  const [regression, setRegression] = useState<RegressionReport | null>(null);
+  const [classification, setClassification] = useState<ClassificationReport | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([MLService.getRegressionReport(), MLService.getClassificationReport()])
+      .then(([regressionReport, classificationReport]) => {
+        if (!mounted) return;
+        setRegression(regressionReport);
+        setClassification(classificationReport);
+      })
+      .catch((err) => {
+        if (mounted) setError(err instanceof Error ? err.message : 'Unable to load model metrics.');
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const regressionChart = useMemo(
+    () => regression?.model_comparison?.map((model) => ({ name: model.name, rmse: model.rmse ?? 0 })) ?? [],
+    [regression],
+  );
+  const classificationChart = useMemo(
+    () => classification?.model_comparison?.map((model) => ({ name: model.name, f1: model.f1_macro ?? 0, accuracy: model.accuracy ?? 0 })) ?? [],
+    [classification],
+  );
+
+  if (isLoading) return <div className="rounded-lg border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">Loading model reports...</div>;
+  if (error || !regression || !classification) return <div className="rounded-lg border border-rose-200 bg-rose-50 p-8 text-sm text-rose-700">{error ?? 'Model reports unavailable.'}</div>;
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 mb-12">
-      <div className="xl:col-span-8 glass-card p-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h3 className="text-xl font-display font-semibold">Model Performance Center</h3>
-            <p className="text-sm text-slate-500">Cross-validation results for multi-regional regression models.</p>
+    <div className="space-y-8 mb-12">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Model Metrics</p>
+        <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Evaluation Reports</h3>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
+          <h4 className="text-lg font-semibold text-slate-900">Regression</h4>
+          <p className="mt-1 text-sm text-slate-500">Best model: {regression.best_model.name}</p>
+          <div className="mt-6 grid grid-cols-2 gap-4">
+            {[
+              ['MAE', regression.best_model.mae],
+              ['MSE', regression.best_model.mse],
+              ['RMSE', regression.best_model.rmse],
+              ['R2', regression.best_model.r2_score],
+              ['CV RMSE Mean', regression.best_model.cv_rmse_mean],
+              ['CV Std', regression.best_model.cv_rmse_std],
+            ].map(([label, value]) => (
+              <div key={label as string} className="rounded-lg bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(value as number | null, label === 'R2' ? 3 : 0)}</p>
+              </div>
+            ))}
           </div>
-          <button className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-white transition-all">
-            Compare History
-          </button>
+
+          <div className="mt-8 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={regressionChart}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} interval={0} angle={-20} height={70} />
+                <YAxis fontSize={10} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(value) => formatNumber(Number(value), 0)} />
+                <Bar dataKey="rmse" fill="#334155" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
+          <h4 className="text-lg font-semibold text-slate-900">Classification</h4>
+          <p className="mt-1 text-sm text-slate-500">Best model: {classification.best_model.name}</p>
+          <div className="mt-6 grid grid-cols-2 gap-4">
+            {[
+              ['Accuracy', classification.best_model.accuracy],
+              ['Precision Macro', classification.best_model.precision_macro],
+              ['Recall Macro', classification.best_model.recall_macro],
+              ['F1 Macro', classification.best_model.f1_macro],
+              ['ROC-AUC Macro', classification.best_model.roc_auc_macro],
+              ['CV F1 Std', classification.best_model.cv_score_std],
+            ].map(([label, value]) => (
+              <div key={label as string} className="rounded-lg bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(value as number | null, 3)}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={classificationChart}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} interval={0} angle={-20} height={70} />
+                <YAxis fontSize={10} axisLine={false} tickLine={false} domain={[0, 1]} />
+                <Tooltip formatter={(value) => Number(value).toFixed(3)} />
+                <Bar dataKey="f1" fill="#475569" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
+        <h4 className="text-lg font-semibold text-slate-900">Confusion Matrix</h4>
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-[480px] text-center text-sm">
             <thead>
-              <tr className="border-b border-slate-100">
-                <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Model Name</th>
-                <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">MAE (MAD)</th>
-                <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">R² Score</th>
-                <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">RMSE</th>
-                <th className="pb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">Status</th>
+              <tr>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Actual / Predicted</th>
+                {classification.labels.map((label) => <th key={label} className="p-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</th>)}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {MODEL_METRICS_DATA.map((model) => (
-                <tr key={model.name} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-4">
-                    <p className="text-sm font-semibold text-slate-800">{model.name}</p>
-                  </td>
-                  <td className="py-4 px-4">
-                    <p className="text-sm font-medium text-slate-600">{model.mae}</p>
-                  </td>
-                  <td className="py-4 px-4">
-                    <p className="text-sm font-bold text-slate-900">{model.r2}</p>
-                  </td>
-                  <td className="py-4 px-4">
-                    <p className="text-sm font-medium text-slate-600">{model.rmse}</p>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className={cn(
-                      "px-2 py-1 rounded-full text-[10px] font-bold",
-                      model.status === 'Best' ? "bg-emerald-100 text-emerald-700" :
-                      model.status === 'Experimental' ? "bg-amber-100 text-amber-700" :
-                      "bg-slate-100 text-slate-600"
-                    )}>
-                      {model.status}
-                    </span>
-                  </td>
+            <tbody>
+              {classification.confusion_matrix.map((row, rowIndex) => (
+                <tr key={classification.labels[rowIndex]}>
+                  <th className="p-2 text-left text-sm font-semibold text-slate-700">{classification.labels[rowIndex]}</th>
+                  {row.map((value, colIndex) => (
+                    <td key={`${rowIndex}-${colIndex}`} className={cn('p-3 font-semibold', rowIndex === colIndex ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-50 text-slate-600')}>
+                      {value}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      <div className="xl:col-span-4 flex flex-col gap-6">
-        <div className="glass-card p-6 flex-1">
-          <h4 className="text-sm font-bold text-slate-800 mb-6 flex items-center justify-between">
-            Inference Latency vs Performance
-            <Info size={14} className="text-slate-400" />
-          </h4>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparisonData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
-                <Tooltip 
-                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}
-                />
-                <Bar dataKey="accuracy" fill="#0A84FF" radius={[4, 4, 0, 0]} barSize={24} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 pt-4 border-t border-slate-100">
-             <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">Current Production Model</span>
-                <span className="text-xs font-bold text-brand-blue">XGBoost v2.4</span>
-             </div>
-          </div>
         </div>
       </div>
     </div>

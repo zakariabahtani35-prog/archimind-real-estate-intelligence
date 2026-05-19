@@ -27,3 +27,5 @@ export function usePricePrediction() {
 
   return { predict, isPredicting, result, error };
 }
+
+

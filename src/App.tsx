@@ -1,99 +1,113 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { KpiCards } from './components/KpiCards';
 import { PredictionPanel } from './components/PredictionPanel';
+import { ClassificationPanel } from './components/ClassificationPanel';
 import { DataVisualization } from './components/DataVisualization';
 import { PipelineVisualizer } from './components/PipelineVisualizer';
 import { ModelPerformance } from './components/ModelPerformance';
 import { DatasetExplorer } from './components/DatasetExplorer';
-import { motion, AnimatePresence } from 'motion/react';
+import { FeatureImportancePanel } from './components/FeatureImportancePanel';
+import { ErrorAnalysisPanel } from './components/ErrorAnalysisPanel';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  const showDashboardOverview = activeTab === 'dashboard';
+  const showPrediction = showDashboardOverview || activeTab === 'prediction';
+  const showClassification = activeTab === 'classification';
+  const showAnalytics = showDashboardOverview || activeTab === 'analytics';
+  const showPipeline = showDashboardOverview || activeTab === 'pipeline';
+  const showPerformance = showDashboardOverview || activeTab === 'metrics';
+  const showFeatures = activeTab === 'features';
+  const showErrors = activeTab === 'errors';
+  const showDataset = showDashboardOverview || activeTab === 'dataset';
+
+  const handleRunPrediction = () => {
+    setActiveTab('prediction');
+    requestAnimationFrame(() => {
+      document.getElementById('ml-prediction')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   return (
-    <div className="flex min-h-screen bg-surface-soft">
-      {/* Sidebar - Fixed Left */}
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <Header />
-        
-        <main className="flex-1 p-8 overflow-y-auto">
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header onRunPrediction={handleRunPrediction} />
+
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-              className="max-w-[1600px] mx-auto"
+              transition={{ duration: 0.25 }}
+              className="mx-auto max-w-[1600px]"
             >
-              {activeTab === 'dashboard' ? (
-                <>
-                  <section id="kpis">
-                    <KpiCards />
-                  </section>
-                  
-                  <section id="ml-prediction" className="mt-12">
-                     <PredictionPanel />
-                  </section>
-                  
-                  <section id="analytics" className="mt-12">
-                    <DataVisualization />
-                  </section>
-
-                  <section id="pipeline" className="mt-12">
-                    <PipelineVisualizer />
-                  </section>
-
-                  <section id="performance" className="mt-12">
-                    <ModelPerformance />
-                  </section>
-
-                  <section id="explorer" className="mt-12">
-                    <DatasetExplorer />
-                  </section>
-                  
-                  {/* Footnote */}
-                  <footer className="mt-20 pb-12 border-t border-slate-200 pt-8 flex items-center justify-between">
-                    <p className="text-xs text-slate-400 font-medium tracking-wide">
-                      © 2026 ARCHIMIND ARTIFICIAL INTELLIGENCE SYSTEMS. ALL RIGHTS RESERVED.
-                    </p>
-                    <div className="flex gap-6">
-                      <a href="#" className="text-xs font-bold text-slate-400 hover:text-brand-blue transition-colors">VERSION 2.4.0-STABLE</a>
-                      <a href="#" className="text-xs font-bold text-slate-400 hover:text-brand-blue transition-colors">SECURITY AUDIT</a>
-                      <a href="#" className="text-xs font-bold text-slate-400 hover:text-brand-blue transition-colors">API DOCS</a>
-                    </div>
-                  </footer>
-                </>
-              ) : (
-                <div className="h-[60vh] flex flex-col items-center justify-center text-center">
-                  <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center text-slate-300 mb-6">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                    >
-                      {activeTab === 'settings' ? '⚙️' : '🏗️'}
-                    </motion.div>
-                  </div>
-                  <h2 className="text-2xl font-display font-bold text-slate-800 uppercase tracking-tight">Section under construction</h2>
-                  <p className="text-slate-500 mt-2 max-w-sm">The full {activeTab} enterprise module is currently being optimized for high-throughput inference.</p>
-                  <button 
-                    onClick={() => setActiveTab('dashboard')}
-                    className="mt-8 text-sm font-bold text-brand-blue hover:underline"
-                  >
-                    Return to Mission Control
-                  </button>
-                </div>
+              {showDashboardOverview && (
+                <section id="overview">
+                  <KpiCards />
+                </section>
               )}
+
+              {showPrediction && (
+                <section id="ml-prediction" className={showDashboardOverview ? 'mt-10' : ''}>
+                  <PredictionPanel />
+                </section>
+              )}
+
+              {showClassification && (
+                <section id="classification">
+                  <ClassificationPanel />
+                </section>
+              )}
+
+              {showAnalytics && (
+                <section id="analytics" className={showDashboardOverview ? 'mt-10' : ''}>
+                  <DataVisualization />
+                </section>
+              )}
+
+              {showPipeline && (
+                <section id="pipeline" className={showDashboardOverview ? 'mt-10' : ''}>
+                  <PipelineVisualizer />
+                </section>
+              )}
+
+              {showPerformance && (
+                <section id="performance" className={showDashboardOverview ? 'mt-10' : ''}>
+                  <ModelPerformance />
+                </section>
+              )}
+
+              {showFeatures && (
+                <section id="features">
+                  <FeatureImportancePanel />
+                </section>
+              )}
+
+              {showErrors && (
+                <section id="errors">
+                  <ErrorAnalysisPanel />
+                </section>
+              )}
+
+              {showDataset && (
+                <section id="explorer" className={showDashboardOverview ? 'mt-10' : ''}>
+                  <DatasetExplorer />
+                </section>
+              )}
+
+              <footer className="mt-16 border-t border-slate-200 pb-8 pt-6">
+                <p className="text-xs font-medium text-slate-400">
+                  ArchiMind AI · PostgreSQL OBT to reproducible sklearn artifacts.
+                </p>
+              </footer>
             </motion.div>
           </AnimatePresence>
         </main>
@@ -101,4 +115,3 @@ export default function App() {
     </div>
   );
 }
-
